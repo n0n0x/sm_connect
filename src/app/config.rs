@@ -73,23 +73,32 @@ impl Config {
     pub fn new() -> Result<Arc<Mutex<Config>>> {
         let config_path = Config::get_config_path()?;
 
-        let mut file = std::fs::OpenOptions::new()
+        let config = std::fs::OpenOptions::new()
             .create(true)
-            .truncate(false)
             .read(true)
             .write(true)
-            .open(config_path)?;
-
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)?;
-        let config = match from_str(&contents) {
-            Ok(config) => config,
-            Err(_) => {
+            .open(&config_path)
+            .and_then(|mut file| {
+                let mut contents = String::new();
+                file.read_to_string(&mut contents)?;
+                Ok(contents)
+            })
+            .ok()
+            .and_then(|contents| {
+                if contents.is_empty() {
+                    None
+                } else {
+                    from_str(&contents).ok()
+                }
+            })
+            .unwrap_or_else(|| {
                 let config = Config::default();
-                config.persist()?;
+                if let Err(e) = config.persist() {
+                    eprintln!("Failed to persist default config: {}", e);
+                }
                 config
-            }
-        };
+            });
+
         Ok(Arc::new(Mutex::new(config)))
     }
 
@@ -105,10 +114,9 @@ impl Config {
     }
 
     fn get_config_path() -> Result<PathBuf> {
-        let Some(home_dir) = home_dir() else {
-            return Result::Err(anyhow::anyhow!("Could not find home directory"));
-        };
-        Ok(home_dir.join(".sm_connect.json"))
+        home_dir()
+            .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))
+            .map(|home| home.join(".sm_connect.json"))
     }
 
     pub fn get_visible_regions(&self) -> Vec<String> {
@@ -147,25 +155,11 @@ impl Config {
         }
         self.persist()
     }
-    #[allow(dead_code)]
-    pub fn unset_favorite_region(&mut self, region: String) -> Result<()> {
-        if let Some(region) = self.regions.get_mut(&region) {
-            region.favorite = false;
-        }
-        self.persist()
-    }
-    #[allow(dead_code)]
-    pub fn favorite_region(&mut self, region: String) -> Result<()> {
-        if let Some(region) = self.regions.get_mut(&region) {
-            region.favorite = true;
-        }
-        self.persist()
-    }
-    #[allow(dead_code)]
+
     pub fn get_recent_timeout(&self) -> u64 {
         self.recent_timeout
     }
-    #[allow(dead_code)]
+
     pub fn set_recent_timeout(&mut self, timeout: u64) -> Result<()> {
         self.recent_timeout = timeout;
         self.persist()

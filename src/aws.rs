@@ -23,7 +23,7 @@ impl From<(Instance, Region)> for InstanceInfo {
     fn from(val: (Instance, Region)) -> Self {
         let (instance, region) = val;
         let tags = InstanceInfo::get_tags_map(&instance);
-        let name = tags.get("Name").unwrap_or(&"".to_string()).to_string();
+        let name = tags.get("Name").cloned().unwrap_or_default();
         InstanceInfo {
             region,
             name,
@@ -48,17 +48,16 @@ impl InstanceInfo {
     }
 
     fn get_tags_map(instance: &Instance) -> HashMap<String, String> {
-        let Some(ref tags) = instance.tags else {
-            return HashMap::new();
-        };
-        tags.iter()
-            .map(|tag| {
-                (
-                    tag.key.clone().unwrap_or_default(),
-                    tag.value.clone().unwrap_or_default(),
-                )
+        instance.tags.as_ref()
+            .map_or_else(HashMap::new, |tags| {
+                tags.iter()
+                    .filter_map(|tag| {
+                        tag.key.as_ref().map(|key| {
+                            (key.clone(), tag.value.clone().unwrap_or_default())
+                        })
+                    })
+                    .collect()
             })
-            .collect()
     }
 
     pub fn get_region(&self) -> Region {
@@ -104,14 +103,14 @@ pub async fn fetch_instances(region: Region) -> Result<Vec<InstanceInfo>> {
         .send()
         .await?;
 
-    let binding = result.reservations.unwrap();
+    let reservations = result.reservations.unwrap_or_default();
     let recents = History::read()?;
-    let instances: Vec<InstanceInfo> = binding
+    let instances: Vec<InstanceInfo> = reservations
         .iter()
-        .flat_map(|reservation| reservation.instances.clone().unwrap())
+        .flat_map(|reservation| reservation.instances.clone().unwrap_or_default())
         .map(|instance: Instance| {
-            let last_accessed = recents
-                .get(&instance.instance_id.clone().unwrap_or_default())
+            let last_accessed = instance.instance_id.as_ref()
+                .and_then(|id| recents.get(id))
                 .map(|entry| entry.get_when());
             let mut instance_info: InstanceInfo = (instance, region.clone()).into();
             instance_info.last_access = last_accessed;

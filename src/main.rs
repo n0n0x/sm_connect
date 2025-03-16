@@ -12,6 +12,12 @@ use anyhow::Result;
 use signal_hook::{consts::signal::*, iterator::Signals};
 use clap::Parser;
 use aws_config::Region;
+use crossterm::{
+    execute,
+    terminal::{Clear, ClearType, disable_raw_mode},
+    cursor::MoveTo,
+};
+use std::io::{self, Write};
 
 /// AWS Systems Manager Session Manager connection tool
 #[derive(Parser, Debug)]
@@ -34,30 +40,42 @@ async fn main() -> Result<()> {
     if let (Some(region_str), Some(instance_id)) = (args.region, args.instance) {
         let region = Region::new(region_str);
         let instance = InstanceInfo::new(region, instance_id);
-        connect(instance)?;
-        return Ok(());
+        return connect(instance);
     }
 
     // Otherwise, run the interactive UI
     let mut app = App::new()?;
-    let selected = app.run().await;
+    let result = app.run().await;
+    
+    // Explicitly drop the app to ensure terminal is restored before connecting
     drop(app);
-    match selected {
-        Err(e) => match e.downcast_ref() {
-            Some(app::RuntimeError::UserExit) => {}
+    
+    match result {
+        Ok(instance) => connect(instance),
+        Err(e) => match e.downcast_ref::<app::RuntimeError>() {
+            Some(app::RuntimeError::UserExit) => Ok(()),
             _ => {
-                println!("{:?}", e);
+                eprintln!("Error: {:?}", e);
+                Ok(())
             }
         },
-        Ok(instance) => connect(instance)?,
     }
-    Ok(())
 }
 
 fn connect(instance: InstanceInfo) -> Result<()> {
-    // Run the AWS command
+    // Save to history before connecting
     let entry = HistoryEntry::new(instance.get_instance_id());
     History::save(entry)?;
+    
+    // Make sure raw mode is disabled
+    disable_raw_mode()?;
+    
+    // Clear the screen and move cursor to top-left before connecting
+    let mut stdout = io::stdout();
+    execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
+    stdout.flush()?;
+    
+    // Run the AWS command
     let mut child = Command::new("aws")
         .args([
             "--region",
@@ -71,7 +89,7 @@ fn connect(instance: InstanceInfo) -> Result<()> {
 
     // Catch SIGINT, SIGSTP signal and do nothing
     // So that actually ctrl+c / ctrl+z works on the aws ssm session instead of killing / stopping us
-    let mut _signals = Signals::new([SIGINT, SIGTSTP])?;
+    let _signals = Signals::new([SIGINT, SIGTSTP])?;
 
     child.wait()?;
     Ok(())

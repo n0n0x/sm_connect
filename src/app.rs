@@ -101,68 +101,6 @@ impl App {
                     }
                 },
             }
-            // handle events
-            // let event = event::read()?;
-            // match self.status {
-            //     SelectedScreen::RegionSelect => {
-            //         let action = self.region_select_component.handle_action(event)?;
-            //         match action {
-            //             Action::Exit => {
-            //                 should_exit = true;
-            //             }
-            //             Action::Return(region) => {
-            //                 self.status = SelectedScreen::InstanceSelect;
-            //                 let instances = fetch_instances(Region::new(region)).await?;
-            //                 self.instance_selection_component
-            //                     .update_instances(instances);
-            //             }
-            //             Action::Hide(region) => {
-            //                 let mut config = self.config.lock().unwrap();
-            //                 config.hide_region(region)?;
-            //                 self.region_select_component
-            //                     .update_items(config.get_visible_regions());
-            //             }
-            //             Action::Reset => {
-            //                 let mut config = self.config.lock().unwrap();
-            //                 config.reset_hidden_regions()?;
-            //                 self.region_select_component
-            //                     .update_items(config.get_visible_regions());
-            //             }
-            //             Action::ToggleFavorite(region) => {
-            //                 let mut config = self.config.lock().unwrap();
-            //                 config.toggle_favorite_region(region)?;
-            //                 self.region_select_component
-            //                     .set_favorites(config.get_favorite_regions());
-            //             }
-            //             Action::OpenConfig => {
-            //                 self.status = SelectedScreen::Config;
-            //             }
-            //             _ => {}
-            //         }
-            //     }
-            //     SelectedScreen::InstanceSelect => {
-            //         let action = self.instance_selection_component.handle_action(event)?;
-            //         match action {
-            //             Action::Exit => {
-            //                 self.status = SelectedScreen::RegionSelect;
-            //             }
-            //             Action::ReturnInstance(instance) => {
-            //                 should_exit = true;
-            //                 return_value = Some(instance);
-            //             }
-            //             Action::Select(instance) => {
-            //                 self.info_panel_component.set_instance(instance);
-            //             }
-            //             _ => {}
-            //         }
-            //     }
-            //     SelectedScreen::Config => {
-            //         let action = self.config_panel.handle_action(event)?;
-            //         if let Action::Exit = action {
-            //             self.status = SelectedScreen::RegionSelect;
-            //         }
-            //     }
-            // }
 
             if should_exit {
                 break;

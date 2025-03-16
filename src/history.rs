@@ -11,13 +11,13 @@ const RECENT_TIMEOUT: u64 = 60 * 60 * 24 * 30;
 pub fn get_current_time() -> u64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
+        .expect("System time before Unix epoch")
         .as_secs()
 }
 
 pub struct History {}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HistoryEntry {
     instance_id: String,
     when: u64,
@@ -49,29 +49,37 @@ impl History {
 
     pub fn read() -> Result<HashMap<String, HistoryEntry>> {
         let mut entries = HashMap::new();
-        let file = Self::get_history_path()?;
-        let Ok(file) = std::fs::File::open(file) else {
+        let file_path = Self::get_history_path()?;
+        
+        // If file doesn't exist, return empty map
+        if !file_path.exists() {
             return Ok(entries);
-        };
+        }
+        
+        let file = std::fs::File::open(file_path)?;
         let current_time = get_current_time();
         let reader = std::io::BufReader::new(file);
+        
         for line in reader.lines() {
             let line = line?;
             let entry: HistoryEntry = from_str(&line)?;
+            
+            // Skip expired entries
             if entry.when < current_time - RECENT_TIMEOUT {
                 continue;
             }
-            match entries.get_mut(entry.get_instance_id()) {
-                Some(existing) => {
+            
+            // Keep only the most recent entry for each instance
+            entries
+                .entry(entry.get_instance_id().to_string())
+                .and_modify(|existing: &mut HistoryEntry| {
                     if existing.when < entry.when {
-                        *existing = entry;
+                        *existing = entry.clone();
                     }
-                }
-                None => {
-                    entries.insert(entry.get_instance_id().to_string(), entry);
-                }
-            }
+                })
+                .or_insert(entry);
         }
+        
         Ok(entries)
     }
 
@@ -79,12 +87,13 @@ impl History {
         let file = Self::get_history_path()?;
         let mut file = std::fs::OpenOptions::new()
             .create(true)
-            .append(true)
+            .write(true)
+            .truncate(true)
             .open(file)?;
+        
         for entry in entries.values() {
             writeln!(file, "{}", to_string(entry)?)?;
         }
-        file.flush()?;
         Ok(())
     }
 
@@ -99,9 +108,8 @@ impl History {
     }
 
     fn get_history_path() -> Result<PathBuf> {
-        let Some(home_dir) = home_dir() else {
-            return Result::Err(anyhow::anyhow!("Could not find home directory"));
-        };
-        Ok(home_dir.join(".sm_connect_history"))
+        home_dir()
+            .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))
+            .map(|home| home.join(".sm_connect_history"))
     }
 }

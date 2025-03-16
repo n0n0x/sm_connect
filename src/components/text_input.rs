@@ -78,19 +78,8 @@ impl TextInput {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn reset(&mut self) {
-        self.search_input = "".into();
-        self.search_cursor_position = 0;
-    }
-
     fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
         new_cursor_pos.clamp(0, self.search_input.len())
-    }
-
-    #[allow(dead_code)]
-    fn reset_cursor(&mut self) {
-        self.search_cursor_position = 0;
     }
 
     pub fn get_value(&self) -> String {
